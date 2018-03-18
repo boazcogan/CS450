@@ -20,17 +20,12 @@ int main() {
     while( fgets(line, MAX_LINE_CHARS, stdin) ) {
         int num_words = split_cmd_line(line, line_words);
 
-        printf("all of the line is: %s\n\n", line);
         // Just for demonstration purposes
         for (int i=0; i < num_words; i++)
         {
-            printf("line_words at i is: %s\n\n", line_words[i]);
-            printf("i is currently: %d\n\n", i);
             if (line_words[i] == "^D")
                 break;
-            printf("\nThe line is: %s\n", line);
         }
-        printf("before execvp, line_words[0] = %s\n\n", line_words[0]);
         execute_cmd(line_words);
         printf("\n\n\n");
     }
@@ -46,3 +41,6 @@ void execute_cmd(char ** line_words)
         execvp(line_words[0], line_words);
     }    
 }
+
+
+
