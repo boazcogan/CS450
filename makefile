@@ -1,10 +1,13 @@
 # Makefile for pipe test
 
-all: main.x pipes.x pipe_demo.x
+all: one_pipe.x main.x pipes.x pipe_demo.x
 
 # $@ is make shorthand for the thing on the left side of the colon
 #   (pipes.x in this case)
 # $^ stands for everything on the right side of the colon (the .o files)
+one_pipe.x: one_pipe.c parsetools.o
+	gcc -g -o $@ $^
+        
 
 main.x: execute_cmd.c parsetools.o
 	gcc -g -o $@ $^

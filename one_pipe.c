@@ -9,6 +9,7 @@
 #include<string.h>
 
 void execute_cmd(char ** line_words);
+char * break_down_args(char ** line_words, int numwords);
 
 
 int main() {
@@ -20,11 +21,17 @@ int main() {
     while( fgets(line, MAX_LINE_CHARS, stdin) ) {
         int num_words = split_cmd_line(line, line_words);
         // Just for demonstration purposes
-        char *** broken_down_args = break_down_args(line_words); 
+        char * broken_down_args = break_down_args(line_words, num_words); 
+        char * first = broken_down_args[0];
+        char * second = broken_down_args[1];
+        if (second == NULL)
+            execute_cmd(line_words);
+        else
+            printf("else");
+
         
         
-        
-        execute_cmd(line_words);
+        //execute_cmd(line_words);
         printf("\n\n\n");
     }
     return 0;
@@ -40,14 +47,14 @@ void execute_cmd(char ** line_words)
     }    
 }
 
-char *** break_down_args(char ** line_words)
+char * break_down_args(char ** line_words, int numwords)
 {
-        char * cmds = [MAX_LINE_CHARS];
+        char* cmds[MAX_LINE_CHARS];
         // store the idx of the last encountered pipe
         int last_pipe = 0;
         int cmds_counter = 0;
 
-        for (int i=0; i < num_words; i++)
+        for (int i=0; i < numwords; i++)
         {
             if (line_words[i] == "^D")
                 break;
@@ -66,10 +73,24 @@ char *** break_down_args(char ** line_words)
                     current_command[counter] = line_words[j];
                     counter++;
                 }
-                cmds[comds_counter] = current_command;
+                cmds[cmds_counter] = current_command;
+                cmds_counter++;
                 last_pipe = i+1;
             }
 
+        }
+        if (last_pipe == 0)
+        {
+           cmds[0] = line_words;
+           return cmds;
+        }
+        else
+        {
+           for (int i=0;i<cmds_counter;i++)
+           {
+               printf("the current command is: %s\n", cmds[i][0]);
+           }
+           return cmds;
         }
 }
 
