@@ -45,7 +45,7 @@ int main(void)
         syserror( "Parent could not close stdin" );
     if (close(pfd[1]) == -1)
         syserror( "Parent could not close stdout" );
-    while ( wait(NULL) != -1) ;
+    while ( wait(NULL) != -1);
 }
 
 void syserror(const char *s)
