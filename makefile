@@ -7,7 +7,6 @@ all: one_pipe.x main.x pipes.x pipe_demo.x
 # $^ stands for everything on the right side of the colon (the .o files)
 one_pipe.x: one_pipe.c parsetools.o
 	gcc -g -o $@ $^
-        
 
 main.x: execute_cmd.c parsetools.o
 	gcc -g -o $@ $^
