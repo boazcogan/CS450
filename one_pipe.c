@@ -24,14 +24,14 @@ int main() {
         // Just for demonstration purposes
         for (int i=0; i < num_words; i++)
         {
-            if (line_words[i] == "^D")
-                break;
+            //if (line_words[i] == "^D")
+            //    break;
         }
         // Lets not worry about executing a command just yet...
         int last_pipe_index = 0;
         char** all_args[MAX_LINE_WORDS];
         int total_args = 0;
-        // I want an array that looks like, [cmd1,cmd2,cmd3,cmd4] where each comma is a pipe.
+        // I want an array that looks like, [cmd1,cmd2,cmd3,cmd4, ..., cmd n] where each comma is a pipe.
         // So put all but the last command in an array called all args
         for (int i=0;i<num_words;i++)
 	{
@@ -53,9 +53,19 @@ int main() {
         // put the last command in there too
         //char* whole_arg[MAX_LINE_WORDS +1];
         char ** whole_arg = malloc(MAX_LINE_WORDS+1*sizeof(char*));
-        for (int i = last_pipe_index+1; i < num_words; i++)
+        if (last_pipe_index == 0)
         {
-            whole_arg[i-(last_pipe_index+1)] = line_words[i];
+             for (int i = last_pipe_index; i < num_words; i++)
+             {
+                 whole_arg[i-(last_pipe_index)] = line_words[i];
+             }
+        }
+        else
+        {
+            for (int i = last_pipe_index+1; i < num_words; i++)
+            {
+                whole_arg[i-(last_pipe_index+1)] = line_words[i];
+            }
         }
         whole_arg[num_words-last_pipe_index] = NULL;
         all_args[total_args]=whole_arg;
@@ -83,17 +93,17 @@ int main() {
                 case -1:
                     syserror( "First fork failed" );
                 case  0:
-                    if ( close( 0 ) == -1 )
+                    if ( close( 0 ) == -1 )//|| close(1) == -1)
                         syserror( "Could not close stdin" );
                     dup(pfd[0]);
+                    //dup(pfd[1]);
                     if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                        syserror( "Could not close pfds from first child" );
-                   execvp(all_args[0][0], all_args[0]);
-                   syserror( "Could not ls");
+                   execvp(all_args[1][0], all_args[1]);
+                   syserror( "Could not wc");
             
             }
-
-            for (int i = 1; i < total_args; i++)
+            //for (int i = 1; i < total_args; i++)
             {
                 switch ( pid = fork() ) 
                 {
@@ -105,11 +115,14 @@ int main() {
                         dup(pfd[1]);
                         if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                             syserror( "Could not close pfds from second child" );
-                        execvp(all_args[i][0], all_args[i]);
-                        syserror( "Could not exec wc" );
+                        execvp(all_args[0][0], all_args[0]);
+                        syserror( "Could not exec ls" );
             
                 }
             }
+            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
+                syserror("error");
+            while(wait(NULL) != -1);
         }
 
         printf("\n\n\n");
