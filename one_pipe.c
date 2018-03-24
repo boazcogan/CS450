@@ -39,10 +39,13 @@ int main() {
             {
                  //char* whole_arg[MAX_LINE_WORDS +1];
                  char ** whole_arg = malloc(MAX_LINE_WORDS+1*sizeof(char*));
-                 printf("pipe_encountered");
+                 int pipe_encountered = 0;
                  for (int j = last_pipe_index; j<i;j++)
                  {
-                     whole_arg[j-last_pipe_index]=line_words[j];
+                     if (*(line_words[j]) == '|')
+                         pipe_encountered ++;
+                     else
+                         whole_arg[j-last_pipe_index-pipe_encountered]=line_words[j];
                  }
                  whole_arg[i] = NULL;
                  all_args[total_args] = whole_arg;
