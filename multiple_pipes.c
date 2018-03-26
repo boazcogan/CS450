@@ -60,7 +60,7 @@ int main() {
         }
         // put the last command in there too
         //char* whole_arg[MAX_LINE_WORDS +1];
-        char ** whole_arg = malloc(MAX_LINE_WORDS+1*sizeof(char*));
+        char ** whole_arg = malloc((MAX_LINE_WORDS+1)*sizeof(char*));
         if (total_pipes == 0)
         {
              for (int i = last_pipe_index; i < num_words; i++)
@@ -89,16 +89,16 @@ int main() {
         {
             execute_cmd(all_args[0]);
         }
-        else if (total_pipes == 1)
-        {
-            single_pipe(all_args);
-        }
+//        else if (total_pipes == 1)
+//        {
+//           single_pipe(all_args);
+//        }
         else
         {
             multiple_cmds(all_args, total_args, total_pipes);
         }
         // there is some sort of pipe or redirection occuring
-        printf("\n\n\n");
+        printf("\n");
     }
 
     return 0;
@@ -125,77 +125,113 @@ void syserror(const char *s)
 
 void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
 {
-    int pfd[2];
     // create all the pipes [pipe1, pipe2, pipe3, pipe4, ... , pipeNum_pipes]
     // note: pfd[1] = in, pfd[0] = out
     pid_t pid;
-    if ( pipe (pfd) == -1 )
-         syserror( "Could not create a pipe" );
-    for (int i = num_cmds-1; i>=0; i--)
+    int * pfds[num_pipes];
+    for (int i = 0; i<num_pipes;i++)
     {
-        printf("\nloop: %d\n", i);
-        // its the end of the cycle of pipes so we have a special case
-        if (i == num_cmds-1)
+        int pfd = malloc(sizeof(int));
+        pfds[i]=pfd;
+        if (pipe(pfds[i]) == -1)
         {
+            syserror( "Could not create pipes");
+        }
+    }
+    // for every pipe im going to run two commands and reroute the out of one to
+    // the in of another
+    int current_pipe = 0;
+    for (int i = 0; i < num_cmds; i++)
+    {
+        // if its the first command:
+        if (i == 0)
+        {// run it and put its out to the in of the pipe.
             switch ( pid = fork() )
             {
                 case -1:
                     syserror( "First fork failed" );
                 case  0:
-                    if ( close( 0 ) == -1 )//|| close(1) == -1)
-                        syserror( "Could not close stdin" );
-                    dup(pfd[0]);
-                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                       syserror( "Could not close pfds from first child" );
+                    if ( close( 1 ) == -1 )
+                        syserror( "Could not close stdout" );
+                    dup(pfds[current_pipe][1]);
+                    for (int j = 0; j < num_pipes;j++)
+                    {
+                        if (close(pfds[j][0])==-1 || close(pfds[j][1]) == -1)
+                        {
+                            syserror("Could not close pfds from child");
+                        }
+                    }
                     execvp(all_cmds[i][0], all_cmds[i]);
-                    syserror( "Could not wc");
+                    syserror( "Could not run first command");
             
             }  
         }
-        // all of the middle cases
-        else if (i>0)
-        {
-            i = i;
-        }
-        // the first/last case
-        else
-        {
-            switch ( pid = fork() ) 
+        else if (i < num_cmds-1)
+        {// run it and put its in to the out of the pipe, 
+         // also put its out to the in of the next pipe.
+         // lets start by moving onto the next pipe:
+            current_pipe++;
+            switch ( pid = fork() )
             {
-                    case -1:
-                       syserror( "Second fork failed" );
-                    case  0:
-                        if ( close( 1 ) == -1 )
-                            syserror( "Could not close stdout" );
-                        dup(pfd[1]);
-                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                            syserror( "Could not close pfds from second child" );
-                        execvp(all_cmds[i][0], all_cmds[i]);
-                        syserror( "Could not exec ls" );
-                
+                case -1:
+                    syserror( "intermediate fork failed" );
+                case  0:
+                    if ( close( 0 ) == -1)
+                        syserror( "Could not close stdin" );
+                    dup(pfds[current_pipe-1][0]);
+                    if ( close( 1 ) == -1)
+                        syserror( "Could not close stout" );
+                    dup(pfds[current_pipe][1]);
+                    for (int j = 0; j < num_pipes;j++)
+                    {
+                        if (close(pfds[j][0])==-1 || close(pfds[j][1]) == -1)
+                        {
+                            syserror("Could not close pfds from child");
+                        }
+                    }
+                    execvp(all_cmds[i][0], all_cmds[i]);
+                    syserror( "Could not run intermediate command");
+
+
             }
 
         }
-       
+        else
+        {
+        // its the last pipe so we handle it differently
+        // move on with the pipe
+            current_pipe++;
+            switch ( pid = fork() )
+            {
+                case -1:
+                    syserror( "last fork failed" );
+                case  0:
+                    if ( close( 0 ) == -1)
+                        syserror( "Could not close stdin" );
+                    dup(pfds[current_pipe-1][0]);
+                    for (int j = 0; j < num_pipes;j++)
+                    {
+                        if (close(pfds[j][0])==-1 || close(pfds[j][1]) == -1)
+                        {
+                            syserror("Could not close pfds from child");
+                        }
+                    }
+                    execvp(all_cmds[i][0], all_cmds[i]);
+                    syserror( "Could not run last command"); 
+            }
+         } 
     }
-    // finish the pipes
-    if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
-        syserror("error");
-    printf("hello");
+    for (int j = 0; j < num_pipes;j++)
+    {
+        if (close(pfds[j][0])==-1 || close(pfds[j][1]) == -1)
+        {
+            syserror("Could not close pfds from parent");
+        }
+    }
     while(wait(NULL) != -1);
 }
+
 /*
-void multiple_cmds(char *** all_cmds, int num_cmds)
-{
-    int pfd[2*(num_cmds-1)];
-
-
-
-
-
-}*/
-
-
 void single_pipe(char *** all_cmds)
 {
             int pfd[2];
@@ -237,48 +273,4 @@ void single_pipe(char *** all_cmds)
             while(wait(NULL) != -1);
 
 
-}
-/*
-void single_pipe(char *** all_cmds)
-{
-            int pfd[2];
-            pid_t pid;
-            if ( pipe (pfd) == -1 )
-                syserror( "Could not create a pipe" );
-            switch ( pid = fork() )
-            {   
-                case -1:
-                    syserror( "First fork failed" );
-                case  0: 
-                    if ( close( 1 ) == -1 )
-                        syserror( "Could not close stdin" );
-                    dup(pfd[0]);
-                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                       syserror( "Could not close pfds from first child" );
-                   execvp(all_cmds[0][0], all_cmds[0]);
-                   syserror( "Could not wc");
-            
-            }
-            {   
-                switch ( pid = fork() )
-                {   
-                    case -1:
-                       syserror( "Second fork failed" );
-                    case  0: 
-                        if ( close( 0 ) == -1 )
-                            syserror( "Could not close stdout" );
-                        dup(pfd[1]);
-                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                            syserror( "Could not close pfds from second child" );
-                        execvp(all_cmds[1][0], all_cmds[1]);
-                        syserror( "Could not exec ls" );
-                
-                }
-            }
-            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
-                syserror("error");
-            while(wait(NULL) != -1);
-
-
-}
-*/
+}*/
