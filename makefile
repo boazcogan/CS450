@@ -33,3 +33,6 @@ pipe_demo.o: pipe_demo.c
 clean:
 	rm -f *.x *.o *~
 
+push:
+	make clean
+	git add .

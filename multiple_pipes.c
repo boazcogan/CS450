@@ -10,7 +10,7 @@
 
 void execute_cmd(char ** line_words);
 void syserror( const char * );
-void multiple_cmds(char *** all_cmds, int num_cmds);
+void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes);
 
 
 int main() {
@@ -34,6 +34,7 @@ int main() {
         int total_args = 0;
         // I want an array that looks like, [cmd1,cmd2,cmd3,cmd4, ..., cmd n] where each comma is a pipe.
         // So put all but the last command in an array called all args
+        int total_pipes = 0;
         for (int i=0;i<num_words;i++)
 	{
             if (*(line_words[i]) == '|')
@@ -49,6 +50,7 @@ int main() {
                      else
                          whole_arg[j-last_pipe_index-pipe_encountered]=line_words[j];
                  }
+                 total_pipes += pipe_encountered;
                  whole_arg[i] = NULL;
                  all_args[total_args] = whole_arg;
                  total_args++;
@@ -58,7 +60,7 @@ int main() {
         // put the last command in there too
         //char* whole_arg[MAX_LINE_WORDS +1];
         char ** whole_arg = malloc(MAX_LINE_WORDS+1*sizeof(char*));
-        if (last_pipe_index == 0)
+        if (total_pipes == 0)
         {
              for (int i = last_pipe_index; i < num_words; i++)
              {
@@ -81,57 +83,15 @@ int main() {
         // the last command, or is it an intermediate command.
         // Only command
 
-        //if (total_args == 1)
-        //{
-        //    execute_cmd(all_args[0]);
-        //}
-        multiple_cmds(all_args, total_args);
-        // there is some sort of pipe or redirection occuring
-        /*
+        if (total_args == 1)
+        {
+            execute_cmd(all_args[0]);
+        }
         else
         {
-            // handle the first pipe in the sequence out of the loop since it is unique
-            int pfd[2];
-            pid_t pid;
-            if ( pipe (pfd) == -1 )
-                syserror( "Could not create a pipe" );
-            switch ( pid = fork() )
-            {
-                case -1:
-                    syserror( "First fork failed" );
-                case  0:
-                    if ( close( 0 ) == -1 )//|| close(1) == -1)
-                        syserror( "Could not close stdin" );
-                    dup(pfd[0]);
-                    //dup(pfd[1]);
-                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                       syserror( "Could not close pfds from first child" );
-                   execvp(all_args[1][0], all_args[1]);
-                   syserror( "Could not wc");
-            
-            }
-            //for (int i = 1; i < total_args; i++)
-            {
-                switch ( pid = fork() ) 
-                {
-                    case -1:
-                       syserror( "Second fork failed" );
-                    case  0:
-                        if ( close( 1 ) == -1 )
-                            syserror( "Could not close stdout" );
-                        dup(pfd[1]);
-                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                            syserror( "Could not close pfds from second child" );
-                        execvp(all_args[0][0], all_args[0]);
-                        syserror( "Could not exec ls" );
-            
-                }
-            }
-            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
-                syserror("error");
-            while(wait(NULL) != -1);
+            multiple_cmds(all_args, total_args, total_pipes);
         }
-        */
+        // there is some sort of pipe or redirection occuring
         printf("\n\n\n");
     }
 
@@ -157,12 +117,14 @@ void syserror(const char *s)
     exit( 1 );
 }
 
-void multiple_cmds(char *** all_cmds, int num_cmds)
+void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
 {
-    int pfd[num_cmds];
+    int pfd[num_pipes*2];
     pid_t pid;
+    printf("\nhello1\n");
     for (int i = num_cmds-1; i>=0; i--)
     {
+        printf("\nloop: %d\n", i);
         if ( pipe (pfd) == -1 )
              syserror( "Could not create a pipe" );
         // its the end of the cycle of pipes so we have a special case
@@ -176,7 +138,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
                     if ( close( 0 ) == -1 )//|| close(1) == -1)
                         syserror( "Could not close stdin" );
                     dup(pfd[0]);
-                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                    if ( close (pfd[num_cmds-i-1]) == -1 || close (pfd[num_cmds-i]) == -1 )
                        syserror( "Could not close pfds from first child" );
                     execvp(all_cmds[i][0], all_cmds[i]);
                     syserror( "Could not wc");
@@ -186,7 +148,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
         // all of the middle cases
         else if (i>0)
         {
-
+            i = i;
         }
         // the first/last case
         else
@@ -199,7 +161,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
                         if ( close( 1 ) == -1 )
                             syserror( "Could not close stdout" );
                         dup(pfd[1]);
-                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                        if ( close (pfd[num_cmds-i-1]) == -1 || close (pfd[num_cmds-i]) == -1 )
                             syserror( "Could not close pfds from second child" );
                         execvp(all_cmds[i][0], all_cmds[i]);
                         syserror( "Could not exec ls" );
@@ -212,6 +174,16 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
     // finish the pipes
     if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
         syserror("error");
+    printf("hello");
     while(wait(NULL) != -1);
 }
+/*
+void multiple_cmds(char *** all_cmds, int num_cmds)
+{
+    int pfd[2*(num_cmds-1)];
 
+
+
+
+
+}*/
