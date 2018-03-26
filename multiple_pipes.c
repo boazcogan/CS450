@@ -11,6 +11,7 @@
 void execute_cmd(char ** line_words);
 void syserror( const char * );
 void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes);
+void single_pipe(char *** all_cmds);
 
 
 int main() {
@@ -50,7 +51,7 @@ int main() {
                      else
                          whole_arg[j-last_pipe_index-pipe_encountered]=line_words[j];
                  }
-                 total_pipes += pipe_encountered;
+                 total_pipes += 1;
                  whole_arg[i] = NULL;
                  all_args[total_args] = whole_arg;
                  total_args++;
@@ -82,10 +83,15 @@ int main() {
         // For piping there are cases, is it the only command (no pipes), is it
         // the last command, or is it an intermediate command.
         // Only command
+        printf("total pipes: %d", total_pipes); 
 
         if (total_args == 1)
         {
             execute_cmd(all_args[0]);
+        }
+        else if (total_pipes == 1)
+        {
+            single_pipe(all_args);
         }
         else
         {
@@ -119,14 +125,15 @@ void syserror(const char *s)
 
 void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
 {
-    int pfd[num_pipes*2];
+    int pfd[2];
+    // create all the pipes [pipe1, pipe2, pipe3, pipe4, ... , pipeNum_pipes]
+    // note: pfd[1] = in, pfd[0] = out
     pid_t pid;
-    printf("\nhello1\n");
+    if ( pipe (pfd) == -1 )
+         syserror( "Could not create a pipe" );
     for (int i = num_cmds-1; i>=0; i--)
     {
         printf("\nloop: %d\n", i);
-        if ( pipe (pfd) == -1 )
-             syserror( "Could not create a pipe" );
         // its the end of the cycle of pipes so we have a special case
         if (i == num_cmds-1)
         {
@@ -138,7 +145,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
                     if ( close( 0 ) == -1 )//|| close(1) == -1)
                         syserror( "Could not close stdin" );
                     dup(pfd[0]);
-                    if ( close (pfd[num_cmds-i-1]) == -1 || close (pfd[num_cmds-i]) == -1 )
+                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                        syserror( "Could not close pfds from first child" );
                     execvp(all_cmds[i][0], all_cmds[i]);
                     syserror( "Could not wc");
@@ -161,7 +168,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
                         if ( close( 1 ) == -1 )
                             syserror( "Could not close stdout" );
                         dup(pfd[1]);
-                        if ( close (pfd[num_cmds-i-1]) == -1 || close (pfd[num_cmds-i]) == -1 )
+                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                             syserror( "Could not close pfds from second child" );
                         execvp(all_cmds[i][0], all_cmds[i]);
                         syserror( "Could not exec ls" );
@@ -187,3 +194,91 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
 
 
 }*/
+
+
+void single_pipe(char *** all_cmds)
+{
+            int pfd[2];
+            pid_t pid;
+            if ( pipe (pfd) == -1 )
+                syserror( "Could not create a pipe" );
+            switch ( pid = fork() )
+            {   
+                case -1:
+                    syserror( "First fork failed" );
+                case  0: 
+                    if ( close( 1 ) == -1 )
+                        syserror( "Could not close stdin" );
+                    dup(pfd[1]);
+                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                       syserror( "Could not close pfds from first child" );
+                   execvp(all_cmds[0][0], all_cmds[0]);
+                   syserror( "Could not wc");
+            
+            }
+            {   
+                switch ( pid = fork() )
+                {   
+                    case -1:
+                       syserror( "Second fork failed" );
+                    case  0: 
+                        if ( close( 0 ) == -1 )
+                            syserror( "Could not close stdout" );
+                        dup(pfd[0]);
+                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                            syserror( "Could not close pfds from second child" );
+                        execvp(all_cmds[1][0], all_cmds[1]);
+                        syserror( "Could not exec ls" );
+                
+                }
+            }
+            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
+                syserror("error");
+            while(wait(NULL) != -1);
+
+
+}
+/*
+void single_pipe(char *** all_cmds)
+{
+            int pfd[2];
+            pid_t pid;
+            if ( pipe (pfd) == -1 )
+                syserror( "Could not create a pipe" );
+            switch ( pid = fork() )
+            {   
+                case -1:
+                    syserror( "First fork failed" );
+                case  0: 
+                    if ( close( 1 ) == -1 )
+                        syserror( "Could not close stdin" );
+                    dup(pfd[0]);
+                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                       syserror( "Could not close pfds from first child" );
+                   execvp(all_cmds[0][0], all_cmds[0]);
+                   syserror( "Could not wc");
+            
+            }
+            {   
+                switch ( pid = fork() )
+                {   
+                    case -1:
+                       syserror( "Second fork failed" );
+                    case  0: 
+                        if ( close( 0 ) == -1 )
+                            syserror( "Could not close stdout" );
+                        dup(pfd[1]);
+                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
+                            syserror( "Could not close pfds from second child" );
+                        execvp(all_cmds[1][0], all_cmds[1]);
+                        syserror( "Could not exec ls" );
+                
+                }
+            }
+            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
+                syserror("error");
+            while(wait(NULL) != -1);
+
+
+}
+*/
