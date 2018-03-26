@@ -81,10 +81,10 @@ int main() {
         // the last command, or is it an intermediate command.
         // Only command
 
-        if (total_args == 1)
-        {
-            execute_cmd(all_args[0]);
-        }
+        //if (total_args == 1)
+        //{
+        //    execute_cmd(all_args[0]);
+        //}
         multiple_cmds(all_args, total_args);
         // there is some sort of pipe or redirection occuring
         /*
@@ -159,10 +159,10 @@ void syserror(const char *s)
 
 void multiple_cmds(char *** all_cmds, int num_cmds)
 {
+    int pfd[num_cmds];
+    pid_t pid;
     for (int i = num_cmds-1; i>=0; i--)
     {
-        int pfd[2];
-        pid_t pid;
         if ( pipe (pfd) == -1 )
              syserror( "Could not create a pipe" );
         // its the end of the cycle of pipes so we have a special case
@@ -178,7 +178,7 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
                     dup(pfd[0]);
                     if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                        syserror( "Could not close pfds from first child" );
-                    execvp(all_args[i][0], all_args[i]);
+                    execvp(all_cmds[i][0], all_cmds[i]);
                     syserror( "Could not wc");
             
             }  
@@ -191,8 +191,8 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
         // the first/last case
         else
         {
-                switch ( pid = fork() ) 
-                {
+            switch ( pid = fork() ) 
+            {
                     case -1:
                        syserror( "Second fork failed" );
                     case  0:
@@ -201,17 +201,17 @@ void multiple_cmds(char *** all_cmds, int num_cmds)
                         dup(pfd[1]);
                         if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
                             syserror( "Could not close pfds from second child" );
-                        execvp(all_args[0][0], all_args[0]);
+                        execvp(all_cmds[i][0], all_cmds[i]);
                         syserror( "Could not exec ls" );
                 
-                }
+            }
 
         }
        
     }
     // finish the pipes
-    //if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
-    //    syserror("error");
-    //while(wait(NULL) != -1);
+    if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
+        syserror("error");
+    while(wait(NULL) != -1);
 }
 
