@@ -39,3 +39,8 @@ clean:
 push:
 	make clean
 	git add .
+
+
+clear:
+	clear
+	clear

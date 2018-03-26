@@ -23,12 +23,6 @@ int main() {
     while( fgets(line, MAX_LINE_CHARS, stdin) ) {
         int num_words = split_cmd_line(line, line_words);
 
-        // Just for demonstration purposes
-        for (int i=0; i < num_words; i++)
-        {
-            //if (line_words[i] == "^D")
-            //    break;
-        }
         // Lets not worry about executing a command just yet...
         int last_pipe_index = 0;
         char** all_args[MAX_LINE_WORDS];
@@ -36,11 +30,28 @@ int main() {
         // I want an array that looks like, [cmd1,cmd2,cmd3,cmd4, ..., cmd n] where each comma is a pipe.
         // So put all but the last command in an array called all args
         int total_pipes = 0;
+        // keep track of two variables that will determine if redirection needs to occur
+        int redirect_in = 0;
+        int redirect_out = 0;
+        char * redirect_in_from;
+        char * redirect_out_from;
+        
         for (int i=0;i<num_words;i++)
 	{
+            if (*(line_words[i])=='>')
+            {
+                // set the redirect in flag, store the place we're redirecting from, and move i past the current location.
+                redirect_out = 1;
+                redirect_out_from = line_words[i+1];
+            }
+            if (*(line_words[i])=='<')
+            {
+                // set the redirect in flag, store the place we're redirecting from, and move i past the current location.
+                redirect_in = 1;
+                redirect_in_from = line_words[i+1];
+            }
             if (*(line_words[i]) == '|')
             {
-                 //char* whole_arg[MAX_LINE_WORDS +1];
                  char ** whole_arg = malloc(MAX_LINE_WORDS+1*sizeof(char*));
                  int pipe_encountered = 0;
                  for (int j = last_pipe_index; j<i;j++)
@@ -48,6 +59,10 @@ int main() {
 
                      if (*(line_words[j]) == '|')
                          pipe_encountered ++;
+                     else if (*(line_words[j]) == '<')
+                         j+=1;
+                     else if (*(line_words[j]) == '>')
+                         j+=1;
                      else
                          whole_arg[j-last_pipe_index-pipe_encountered]=line_words[j];
                  }
@@ -59,12 +74,15 @@ int main() {
             }
         }
         // put the last command in there too
-        //char* whole_arg[MAX_LINE_WORDS +1];
         char ** whole_arg = malloc((MAX_LINE_WORDS+1)*sizeof(char*));
         if (total_pipes == 0)
         {
              for (int i = last_pipe_index; i < num_words; i++)
              {
+                 if (*(line_words[i]) == '<')
+                     break;
+                 else if (*(line_words[i]) == '>')
+                     break;
                  whole_arg[i-(last_pipe_index)] = line_words[i];
              }
         }
@@ -72,6 +90,10 @@ int main() {
         {
             for (int i = last_pipe_index+1; i < num_words; i++)
             {
+                 if (*(line_words[i]) == '<')
+                     break;
+                 else if (*(line_words[i]) == '>')
+                     break;
                 whole_arg[i-(last_pipe_index+1)] = line_words[i];
             }
         }
@@ -89,10 +111,6 @@ int main() {
         {
             execute_cmd(all_args[0]);
         }
-//        else if (total_pipes == 1)
-//        {
-//           single_pipe(all_args);
-//        }
         else
         {
             multiple_cmds(all_args, total_args, total_pipes);
@@ -231,46 +249,3 @@ void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
     while(wait(NULL) != -1);
 }
 
-/*
-void single_pipe(char *** all_cmds)
-{
-            int pfd[2];
-            pid_t pid;
-            if ( pipe (pfd) == -1 )
-                syserror( "Could not create a pipe" );
-            switch ( pid = fork() )
-            {   
-                case -1:
-                    syserror( "First fork failed" );
-                case  0: 
-                    if ( close( 1 ) == -1 )
-                        syserror( "Could not close stdin" );
-                    dup(pfd[1]);
-                    if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                       syserror( "Could not close pfds from first child" );
-                   execvp(all_cmds[0][0], all_cmds[0]);
-                   syserror( "Could not wc");
-            
-            }
-            {   
-                switch ( pid = fork() )
-                {   
-                    case -1:
-                       syserror( "Second fork failed" );
-                    case  0: 
-                        if ( close( 0 ) == -1 )
-                            syserror( "Could not close stdout" );
-                        dup(pfd[0]);
-                        if ( close (pfd[0]) == -1 || close (pfd[1]) == -1 )
-                            syserror( "Could not close pfds from second child" );
-                        execvp(all_cmds[1][0], all_cmds[1]);
-                        syserror( "Could not exec ls" );
-                
-                }
-            }
-            if (close(pfd[0]) == -1 || close(pfd[1]) == -1)
-                syserror("error");
-            while(wait(NULL) != -1);
-
-
-}*/
