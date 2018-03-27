@@ -7,11 +7,14 @@
 #include<sys/types.h>
 #include<errno.h>
 #include<string.h>
+#include <fcntl.h>
 
-void execute_cmd(char ** line_words);
+
+
+void execute_cmd(char ** line_words, int ins, int outs, char * red_in, char * red_out);
 void syserror( const char * );
-void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes);
 void single_pipe(char *** all_cmds);
+void multiple_cmds_with_redirection(char *** all_cmds, int num_cmds, int num_pipes, int redirect_in, int redirect_out, char * redirect_in_from, char * redirect_out_from);
 
 
 int main() {
@@ -22,7 +25,27 @@ int main() {
     // or some other input error occurs
     while( fgets(line, MAX_LINE_CHARS, stdin) ) {
         int num_words = split_cmd_line(line, line_words);
+        for (int i=0;i<num_words; i++)
+        {
+              int qflag = 0;
+              char * current = malloc(sizeof(char)*100);
+              for (int j=0;j<strlen(line_words[i]); j++)
+              {
+                  if (line_words[i][j] != '\'' && line_words[i][j]!='"')
+                  {
+                      if (qflag)
+                          current[j-qflag]= line_words[i][j];
+                      else
+                          current[j]= line_words[i][j];
+                  }
+                  else
+                  {
+                      qflag += 1;
+                  }
+              }
+              line_words[i]=current;
 
+        }
         // Lets not worry about executing a command just yet...
         int last_pipe_index = 0;
         char** all_args[MAX_LINE_WORDS];
@@ -105,15 +128,14 @@ int main() {
         // For piping there are cases, is it the only command (no pipes), is it
         // the last command, or is it an intermediate command.
         // Only command
-        printf("total pipes: %d", total_pipes); 
 
         if (total_args == 1)
         {
-            execute_cmd(all_args[0]);
+            execute_cmd(all_args[0], redirect_in, redirect_out, redirect_in_from, redirect_out_from);
         }
         else
         {
-            multiple_cmds(all_args, total_args, total_pipes);
+            multiple_cmds_with_redirection(all_args, total_args, total_pipes, redirect_in, redirect_out, redirect_in_from, redirect_out_from);
         }
         // there is some sort of pipe or redirection occuring
         printf("\n");
@@ -123,11 +145,25 @@ int main() {
 }
 
 
-void execute_cmd(char ** line_words)
+void execute_cmd(char ** line_words, int ins, int outs, char * red_in, char * red_out)
 {
     int pid = fork();
     if ( pid == 0 )
     { 
+        if (ins)
+        {
+            int fd = open(red_in, O_RDONLY);
+            close(0);
+            dup(fd);
+            close(fd);
+        }
+        if (outs)
+        {
+            int fd2 = open(red_out, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+            close(1);
+            dup(fd2);
+            close(fd2);
+        }
         execvp(line_words[0], line_words);
     }    
 }
@@ -141,7 +177,8 @@ void syserror(const char *s)
     exit( 1 );
 }
 
-void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
+
+void multiple_cmds_with_redirection(char *** all_cmds, int num_cmds, int num_pipes, int redirect_in, int redirect_out, char * redirect_in_from, char * redirect_out_from)
 {
     // create all the pipes [pipe1, pipe2, pipe3, pipe4, ... , pipeNum_pipes]
     // note: pfd[1] = in, pfd[0] = out
@@ -169,6 +206,17 @@ void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
                 case -1:
                     syserror( "First fork failed" );
                 case  0:
+                    if (redirect_in)
+                    {
+                     // in needs to be redirected so lets redirect it. 
+                        int fd = open(redirect_in_from, O_RDONLY);
+                        if (close(0)==-1)
+                        {
+                            syserror("could not close stdin");
+                        }
+                        dup(fd);
+                        close(fd);
+                    }
                     if ( close( 1 ) == -1 )
                         syserror( "Could not close stdout" );
                     dup(pfds[current_pipe][1]);
@@ -218,12 +266,21 @@ void multiple_cmds(char *** all_cmds, int num_cmds, int num_pipes)
         {
         // its the last pipe so we handle it differently
         // move on with the pipe
+        // but first lets check to see if we need to redirect out and take care of it now.
             current_pipe++;
             switch ( pid = fork() )
             {
                 case -1:
                     syserror( "last fork failed" );
                 case  0:
+                    if (redirect_out)
+                    {
+                        // in needs to be redirected so lets redirect it. 
+                        int fd = open(redirect_out_from, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+                        close(1);
+                        dup(fd);
+                        close(fd);
+                    }
                     if ( close( 0 ) == -1)
                         syserror( "Could not close stdin" );
                     dup(pfds[current_pipe-1][0]);
